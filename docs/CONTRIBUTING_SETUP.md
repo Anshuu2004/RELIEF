@@ -13,7 +13,7 @@ Install or have access to:
 - A current web browser
 - An internet connection for external resources and integrations
 
-The repository does not currently define a root `package.json`, so a Node.js/npm installation is not required for the basic static preview described below.
+The site itself has no build step, so Node.js/npm is not required for the basic static preview described below. The root `package.json` exists only for the end-to-end tests (Node.js 20 or newer), see "End-to-end tests" in section 4.
 
 ## 2. Fork and clone the repository
 
@@ -99,7 +99,7 @@ For a basic static preview, open `index.html` in your browser.
 
 A local web server is often more reliable than opening files directly, particularly for pages that load scripts or resources using browser features that restrict `file://` URLs.
 
-There is no repository-defined automated test command in the current root setup. Test relevant pages and flows manually in the browser, and check the browser developer console for errors.
+Besides the end-to-end tests below, test relevant pages and flows manually in the browser, and check the browser developer console for errors.
 
 ### Offline support (service worker)
 
@@ -111,6 +111,29 @@ There is no repository-defined automated test command in the current root setup.
 - **Cached vs live:** when the browser is offline, a banner at the top says the page is a saved copy and shows when it was last loaded online (stored in `localStorage` under `relief_last_online_sync`).
 - **Saved facilities:** the Save button on `pages/hospitals.html` stores a small copy of the facility (name, location, phone, coordinates, saved date) in `localStorage` under `relief_saved_facilities`. No account is needed and nothing is sent anywhere. The map needs the network, so it shows a short message offline.
 - **Testing:** serve the repo root over localhost, open `pages/firstaid.html` once, then tick **Offline** in DevTools (Application > Service Workers) and reload.
+
+### End-to-end tests
+
+Browser tests for the main user journeys live in `e2e/` and use [Playwright](https://playwright.dev/) with Chromium. They need Node.js 20 or newer.
+
+```bash
+npm install
+npx playwright install chromium
+npm run test:e2e
+```
+
+On a fresh Linux machine or CI runner use `npx playwright install --with-deps chromium` so the system libraries are installed too. To run one file, use `npx playwright test e2e/sos.spec.js`.
+
+How it works:
+
+- `playwright.config.js` starts `e2e/static-server.js`, a small static file server for the repo root, so no extra tooling or build is needed. Set `E2E_PORT` if the default port is taken.
+- No real service is ever contacted. `e2e/fixtures.js` aborts every request that is not served by the local server (Firebase, fonts, CDN icons, Leaflet, map tiles, Nominatim) and replaces `window.open`. Login and signup run against the browser-only demo accounts, which the pages enable on the local host.
+- Emergency actions are mocked. The SOS specs use a stubbed `navigator.geolocation` and, where a dispatch backend is needed, a same-origin path that Playwright answers. `tel:` and `sms:` links are checked for their `href` and never opened.
+- Every test starts with empty browser storage.
+
+When a test fails, the trace and a screenshot are kept in `test-results/`. Open a trace with `npx playwright show-trace test-results/<test-folder>/trace.zip`, or run `npx playwright show-report` after a CI-style run (`CI=1 npm run test:e2e`) to browse the HTML report. Both folders are git-ignored.
+
+Current coverage: landing page and main navigation, responsive menu, signup/login/logout, medicine reminders, the Relief Assistant panel on the dashboard, the location panel (device location and manual fallback) and the SOS dialog. Not covered yet: the facility list on the hospitals page, and a signed-out redirect for the dashboard (there is a skipped test for it, because `pages/dashboard.html` does not check for a session today).
 
 ## 5. Configuration and external services
 
